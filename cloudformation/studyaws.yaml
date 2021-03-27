@@ -1,0 +1,92 @@
+# テンプレート形式のバージョン
+AWSTemplateFormatVersion: '2010-09-09'
+# テンプレートに関する記述
+Description: 
+  Study AWS associate
+Parameters:
+# Amazon Linux 2の最新版AMI ID取得
+  Ec2ImageId:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+# 作成するインスタンスタイプ
+  Ec2InstanceType:
+    Type: String
+    Default: t2.micro
+# 構築するリソース
+Resources: 
+#  VPC
+  eccubeVPC: 
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+      - Key: Name
+        Value: eccubeVPC
+# IGW
+  eccubeIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: eccubeVPC-IGW
+# IGWをVPCをアタッチ
+  eccubeAttachGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref eccubeVPC
+      InternetGatewayId: !Ref eccubeIGW
+# ルートテーブル設定
+  eccubeRT:
+    Type: AWS::EC2::RouteTable
+    DependsOn: eccubeAttachGW
+    Properties:
+      VpcId: !Ref eccubeVPC
+      Tags:
+      - Key: Name
+        Value: eccubeRT
+# パブリックサブネット
+  eccubePSN:
+    Type: AWS::EC2::Subnet
+    DependsOn: eccubeAttachGW
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: 'true'
+      VpcId: !Ref eccubeVPC
+      Tags:
+      - Key: Name
+        Value: eccubePSN
+# PubSubnet(eccubePSN)-インターネット(eccubeIGW)間のルーティング
+  eccubePSNToeccubeIGW:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref eccubeRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref eccubeIGW
+# ルートテーブルをサブネットに関連付け
+  AssoeccubePSNRT:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref eccubePSN
+      RouteTableId: !Ref eccubeRT
+# EC2インスタンス生成
+  EC2: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: !Ref Ec2ImageId
+      KeyName: !Ref KeyName
+      InstanceType: !Ref Ec2InstanceType
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          SubnetId: !Ref eccubePSN
+          GroupSet:
+            - !Ref EC2SG
+      UserData: !Base64 |
+        #!/bin/bash
+        sudo yum install -y git
+      Tags:
+          - Key: Name
+            Value: ec2-a-cf
+# セキュリティグループ
+EC2SG:
