@@ -129,8 +129,6 @@
   - スループット最適化 HDD(st1)
   - コールドHDD(sc1)
 
-### S3
-
 ## ログ
 
 ### Amazon CloudWatch
